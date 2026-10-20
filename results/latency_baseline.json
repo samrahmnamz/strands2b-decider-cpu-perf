@@ -1,0 +1,68 @@
+{
+  "checkpoint": "StrandsAgents/strands-decider-2B-hobson-v19",
+  "torch_threads": 64,
+  "iters": 20,
+  "workload": "prompt-routing (choice over 6 teams)",
+  "results": [
+    {
+      "tier": "tiny",
+      "state_tokens": 9,
+      "n": 20,
+      "p50_ms": 204.3,
+      "p95_ms": 214.0,
+      "p99_ms": 257.0,
+      "mean_ms": 208.0,
+      "throughput_dec_per_s": 4.81,
+      "route": "billing",
+      "confidence": 0.3111
+    },
+    {
+      "tier": "small",
+      "state_tokens": 31,
+      "n": 20,
+      "p50_ms": 228.4,
+      "p95_ms": 278.4,
+      "p99_ms": 284.7,
+      "mean_ms": 235.2,
+      "throughput_dec_per_s": 4.25,
+      "route": "billing",
+      "confidence": 0.4983
+    },
+    {
+      "tier": "medium",
+      "state_tokens": 92,
+      "n": 20,
+      "p50_ms": 544.5,
+      "p95_ms": 780.6,
+      "p99_ms": 815.6,
+      "mean_ms": 585.4,
+      "throughput_dec_per_s": 1.71,
+      "route": "technical_support",
+      "confidence": 0.3463
+    },
+    {
+      "tier": "large",
+      "state_tokens": 206,
+      "n": 20,
+      "p50_ms": 600.9,
+      "p95_ms": 711.8,
+      "p99_ms": 724.9,
+      "mean_ms": 626.9,
+      "throughput_dec_per_s": 1.6,
+      "route": "billing",
+      "confidence": 0.4327
+    },
+    {
+      "tier": "xlarge",
+      "state_tokens": 534,
+      "n": 20,
+      "p50_ms": 824.8,
+      "p95_ms": 950.4,
+      "p99_ms": 1058.4,
+      "mean_ms": 840.1,
+      "throughput_dec_per_s": 1.19,
+      "route": "billing",
+      "confidence": 0.4826
+    }
+  ]
+}

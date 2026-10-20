@@ -1,0 +1,66 @@
+{
+  "config": {
+    "threads": 32,
+    "merge": true,
+    "precision": "high"
+  },
+  "load_s": 1.96,
+  "iters": 30,
+  "results": [
+    {
+      "tier": "tiny",
+      "state_tokens": 9,
+      "p50_ms": 216.1,
+      "p95_ms": 216.7,
+      "p99_ms": 220.2,
+      "mean_ms": 216.3,
+      "throughput_dec_per_s": 4.62,
+      "route": "billing",
+      "confidence": 0.3111
+    },
+    {
+      "tier": "small",
+      "state_tokens": 31,
+      "p50_ms": 244.7,
+      "p95_ms": 249.0,
+      "p99_ms": 261.5,
+      "mean_ms": 245.6,
+      "throughput_dec_per_s": 4.07,
+      "route": "billing",
+      "confidence": 0.4983
+    },
+    {
+      "tier": "medium",
+      "state_tokens": 92,
+      "p50_ms": 310.8,
+      "p95_ms": 311.9,
+      "p99_ms": 312.2,
+      "mean_ms": 310.9,
+      "throughput_dec_per_s": 3.22,
+      "route": "technical_support",
+      "confidence": 0.3463
+    },
+    {
+      "tier": "large",
+      "state_tokens": 206,
+      "p50_ms": 466.1,
+      "p95_ms": 467.5,
+      "p99_ms": 470.2,
+      "mean_ms": 466.4,
+      "throughput_dec_per_s": 2.14,
+      "route": "billing",
+      "confidence": 0.4327
+    },
+    {
+      "tier": "xlarge",
+      "state_tokens": 534,
+      "p50_ms": 838.3,
+      "p95_ms": 841.7,
+      "p99_ms": 847.8,
+      "mean_ms": 838.7,
+      "throughput_dec_per_s": 1.19,
+      "route": "billing",
+      "confidence": 0.4826
+    }
+  ]
+}

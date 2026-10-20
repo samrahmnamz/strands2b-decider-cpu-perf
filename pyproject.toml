@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdbench"
+version = "1.0.0"
+description = "CPU benchmark and optimized deployment for strands-decider"
+requires-python = ">=3.10"
+dependencies = [
+    "strands-decider==0.2.0",
+]
+
+[project.optional-dependencies]
+serve = ["fastapi==0.153.0", "uvicorn==0.54.0"]
+
+[project.scripts]
+sdbench-latency = "sdbench.latency:main"
+sdbench-concurrency = "sdbench.concurrency:main"
+sdbench-serve = "sdbench.serve:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

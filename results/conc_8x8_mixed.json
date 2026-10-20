@@ -1,0 +1,24 @@
+{
+  "workers": 8,
+  "threads_per": 8,
+  "cores_used": 64,
+  "duration_s": 20.0,
+  "total_decisions": 207,
+  "aggregate_throughput_dec_per_s": 10.3,
+  "latency_under_load_ms": {
+    "p50": 585.4,
+    "p95": 2095.4,
+    "p99": 2185.6,
+    "mean": 783.1
+  },
+  "per_worker_counts": [
+    26,
+    26,
+    26,
+    25,
+    26,
+    26,
+    26,
+    26
+  ]
+}

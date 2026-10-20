@@ -1,0 +1,12 @@
+# Core model stack. CPU torch is installed separately via the PyTorch CPU index
+# (see scripts/setup.sh) so we don't pull multi-GB CUDA wheels onto a CPU host.
+strands-decider==0.2.0
+
+# Serving (optional; only needed for `sdbench.serve`)
+fastapi==0.153.0
+uvicorn==0.54.0
+
+# torch is NOT pinned here on purpose -- install the CPU build with:
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch
+# This project was verified with torch==2.14.1+cpu, transformers==5.20.2,
+# peft==0.21.2, numpy==2.2.6 (all pulled in transitively by strands-decider).
