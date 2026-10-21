@@ -87,3 +87,22 @@ def route_question():
     from strands_decider.schema import ChoiceQuestion
 
     return {"route": ChoiceQuestion(instructions=ROUTE_INSTRUCTIONS, criteria=dict(ROUTE_CRITERIA))}
+
+
+def state_for_token_target(engine, question, target_tokens: int, *, max_pad: int = 40) -> tuple[str, int]:
+    """Grow a routing state until the FULL decision (state + rubric + options) hits
+    ~target_tokens, as reported by `engine.ask(...).usage.input_tokens`.
+
+    Use this to reproduce the published-benchmark comparison point: JevBench decisions
+    average ~950 input tokens, so `state_for_token_target(engine, q, 950)` builds a
+    like-for-like decision. Returns (state_text, measured_full_input_tokens).
+    """
+    base = ("ESCALATION: payout pipeline failing for days; 402s on the payouts endpoint "
+            "and intermittent 5xx on the settlement webhook. ")
+    state = base
+    for _ in range(max_pad):
+        tok = engine.ask(state, question).usage.input_tokens
+        if tok >= target_tokens:
+            return state, tok
+        state += " " + _FILLER.strip()
+    return state, engine.ask(state, question).usage.input_tokens

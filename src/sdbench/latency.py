@@ -28,6 +28,9 @@ def main() -> None:
     ap.add_argument("--no-merge", action="store_true", help="disable LoRA merge")
     ap.add_argument("--no-precision", action="store_true", help="disable matmul precision=high")
     ap.add_argument("--compile", action="store_true", help="enable torch.compile (one-time cost)")
+    ap.add_argument("--token-target", type=int, default=None,
+                    help="instead of the tiers, benchmark one decision sized to ~N input "
+                         "tokens (use 950 to match JevBench's published decision size)")
     ap.add_argument("--json-out", default=None)
     args = ap.parse_args()
 
@@ -44,15 +47,14 @@ def main() -> None:
 
     import torch
     q = route_question()
-    warmup(engine, q, [PROMPTS[t] for t in TIERS], n=args.warmup)
 
-    print(f"threads={torch.get_num_threads()} merge={cfg.merge_lora} "
-          f"precision={cfg.matmul_precision} compile={cfg.compile} load={load_s:.1f}s")
-
-    results = []
-    for tier in TIERS:
-        state = PROMPTS[tier]
-        ntok = len(engine.tok(state, add_special_tokens=True)["input_ids"])
+    if args.token_target:
+        from .workload import state_for_token_target
+        state, ntok = state_for_token_target(engine, q, args.token_target)
+        for _ in range(args.warmup):
+            engine.ask(state, q)
+        print(f"threads={torch.get_num_threads()} merge={cfg.merge_lora} "
+              f"precision={cfg.matmul_precision} compile={cfg.compile} load={load_s:.1f}s")
         lat = []
         choice = conf = None
         for _ in range(args.iters):
@@ -61,12 +63,36 @@ def main() -> None:
             lat.append((time.perf_counter() - s) * 1000)
             a = resp.answers["route"]
             choice, conf = a.choice, a.confidence
-        row = {"tier": tier, "state_tokens": ntok, **summarize(lat),
+        row = {"tier": f"~{args.token_target}tok", "state_tokens": ntok, **summarize(lat),
                "route": choice, "confidence": conf}
-        results.append(row)
-        print(f"  {tier:7s} tok={ntok:5d} p50={row['p50_ms']:8.1f}ms "
+        print(f"  {row['tier']:9s} full_input_tok={ntok:5d} p50={row['p50_ms']:8.1f}ms "
               f"p95={row['p95_ms']:8.1f}ms {row['throughput_dec_per_s']:6.2f} dec/s "
               f"-> {choice} ({conf})")
+        results = [row]
+    else:
+        warmup(engine, q, [PROMPTS[t] for t in TIERS], n=args.warmup)
+
+        print(f"threads={torch.get_num_threads()} merge={cfg.merge_lora} "
+              f"precision={cfg.matmul_precision} compile={cfg.compile} load={load_s:.1f}s")
+
+        results = []
+        for tier in TIERS:
+            state = PROMPTS[tier]
+            ntok = len(engine.tok(state, add_special_tokens=True)["input_ids"])
+            lat = []
+            choice = conf = None
+            for _ in range(args.iters):
+                s = time.perf_counter()
+                resp = engine.ask(state, q)
+                lat.append((time.perf_counter() - s) * 1000)
+                a = resp.answers["route"]
+                choice, conf = a.choice, a.confidence
+            row = {"tier": tier, "state_tokens": ntok, **summarize(lat),
+                   "route": choice, "confidence": conf}
+            results.append(row)
+            print(f"  {tier:7s} tok={ntok:5d} p50={row['p50_ms']:8.1f}ms "
+                  f"p95={row['p95_ms']:8.1f}ms {row['throughput_dec_per_s']:6.2f} dec/s "
+                  f"-> {choice} ({conf})")
 
     out = {
         "checkpoint": cfg.checkpoint,

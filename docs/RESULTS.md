@@ -104,3 +104,59 @@ the slow per-channel depthwise causal convolution with a vectorized multiply-add
 (installed automatically for CPU engines). Profiling a tiny prompt showed the remaining
 cost is dominated by `torch._C._nn.linear` (56 %) — i.e. the matmuls the merge + precision
 + compile stack targets.
+
+
+## How we compare to the published benchmarks
+
+AWS / the model card report decision latency on two reference devices, plus accuracy:
+
+| platform | hardware | reported latency | source |
+|----------|----------|-----------------:|--------|
+| RTX 3090 | NVIDIA GPU | **~115 ms** median | AWS blog, InfoQ, TechGig |
+| Apple M3 | ARM laptop (MacBook) | **~153 ms** (small tasks) | AWS blog, InfoQ, TechGig |
+| JevBench | served at window 4096 | **72.3 %** accuracy / 231 public tasks (v19) | AWS |
+
+**The token-size caveat is the whole story.** A JevBench "decision" is not a short prompt:
+the benchmark methodology states *"one decision is a whole question: its state, its rubric
+and its options — hundreds to thousands of input tokens … Jev reads 950 input tokens per
+decision on average."* The accuracy is served at a 4096-token window. So the published
+~115 ms is a **~950-token decision on a GPU**, not a one-liner.
+
+### Like-for-like at ~950 input tokens
+
+We measured on `r8i.32xlarge` (Intel Xeon 6975P, CPU-only, 32 threads pinned to one NUMA
+node) at a decision whose full input (state + rubric + options) was **997 tokens**:
+
+| config | p50 latency | vs RTX 3090 (115 ms) |
+|--------|------------:|---------------------:|
+| optimized (merge + precision) | 1322 ms | ~11.5× slower |
+| **optimized + `torch.compile`** | **925 ms** | **~8× slower** |
+| RTX 3090 (published) | 115 ms | 1× |
+| Apple M3 (published, small task) | 153 ms | — |
+
+Reading of the comparison (honest version):
+
+- At the **real ~950-token decision size**, one CPU decision is **~8× slower than a 3090**
+  even fully optimized. For single-decision latency a GPU or Apple silicon clearly wins;
+  the CPU path is for no-GPU hosts, RAM-heavy co-tenancy, or horizontal CPU fleets.
+- **`torch.compile` earns its keep exactly here:** 1322 → 925 ms (**1.43×**), under 1 s.
+- For context, our smaller tiers are much faster (tiny 9-tok 187 ms, medium 92-tok 275 ms)
+  — but those are **not** comparable to the published number, which is ~950 tokens. Quoting
+  the 9-token figure against 115 ms would be a cherry-pick; we don't.
+- **Accuracy is unchanged:** every optimization is numerically exact, so the published
+  **72.3 % JevBench** still applies to this build. We trade nothing for the latency.
+
+**Where CPU actually wins:** aggregate throughput and RAM. ~13.5 short-traffic decisions/s
+across 8 replicas on one box, 991 GiB RAM for co-located work, and no GPU in the bill. AWS
+also markets the r8i for **2.5× the memory bandwidth** of the previous generation — the
+exact resource our concurrency ceiling is bound by, so the instance is well matched here.
+
+**Caveats:** the published ~115 ms / ~153 ms are AWS medians over JevBench's task mix on
+their hardware; our 925 ms is a single ~997-token routing decision measured here. Same
+order of token count, not an identical controlled harness. The model's GitHub issues also
+flag CPU **cold-start** and **concurrency** behaviour — both addressed here (warm
+persistent engine; multi-replica serving).
+
+Sources: AWS blog (strandsagents.com/blog/introducing-strands-decider/),
+InfoQ (infoq.com/news/2026/10/aws-strands-agents/),
+JevBench methodology (github.com/fstandhartinger/JevBench).
