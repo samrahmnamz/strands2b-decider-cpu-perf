@@ -1,18 +1,20 @@
 {
-  "note": "Latency at ~950-1000 input tokens/decision, matching JevBench's average decision size (state + rubric + options). This is the apples-to-apples comparison point for the published AWS GPU/M3 figures.",
+  "note": "Latency at ~950-1000 input tokens/decision, matching JevBench's average decision size (state + rubric + options). This is the apples-to-apples comparison point for the published AWS GPU/M3 figures. All three CPU configs measured in one session, 15 iters each, same prompt (full_input_tokens=1007), identical decision output (technical_support @ 0.3658) confirming optimizations do not change the answer.",
   "checkpoint": "StrandsAgents/strands-decider-2B-hobson-v19",
   "host": "r8i.32xlarge (Intel Xeon 6975P-C), CPU only",
-  "config": {"threads": 32, "numa_pin": "physcpubind=0-31 membind=0", "merge_lora": true, "matmul_precision": "high"},
-  "full_decision_input_tokens": 997,
+  "full_decision_input_tokens": 1007,
+  "decision": {"route": "technical_support", "confidence": 0.3658},
   "results": {
-    "optimized_merge_precision": {"p50_ms": 1322, "mean_ms": 1312, "route": "technical_support", "confidence": 0.368},
-    "optimized_plus_compile":    {"p50_ms": 925,  "mean_ms": 925,  "route": "technical_support", "confidence": 0.368}
+    "baseline_untuned_64t":            {"p50_ms": 1301, "p95_ms": 1389, "config": "64 threads, no merge, no precision, no pin"},
+    "optimized_merge_precision_32t":   {"p50_ms": 1385, "p95_ms": 1392, "config": "32 threads, merge+precision, physcpubind=0-31 membind=0"},
+    "optimized_plus_compile_32t":      {"p50_ms": 1224, "p95_ms": 1254, "config": "32 threads, merge+precision+compile, pinned"}
   },
   "published_reference": {
     "rtx_3090_median_ms": 115,
     "apple_m3_small_task_ms": 153,
     "jevbench_accuracy": 0.723,
     "jevbench_avg_input_tokens_per_decision": 950,
+    "cpu_best_vs_3090": "~11x slower",
     "sources": [
       "https://strandsagents.com/blog/introducing-strands-decider/",
       "https://www.infoq.com/news/2026/10/aws-strands-agents/",

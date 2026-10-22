@@ -16,6 +16,35 @@ How to run `strands-decider` as a CPU decision service, tuned for an `r8i.32xlar
 Match replica count to your latency target, not just throughput: fewer, fatter replicas
 (8×8) give far better tail latency than many thin ones (32×2).
 
+## EC2 instance & threading notes
+
+You do **not** need to configure anything at instance launch — threading is controlled
+per-process at runtime. But two EC2 facts explain *why* the tuning is necessary:
+
+- **vCPU = hyperthread, not a core.** `r8i.32xlarge` reports 128 vCPUs but has **64
+  physical cores** (`lscpu` → `Thread(s) per core: 2`; CPU 0's siblings are `0,64`). Left
+  alone, PyTorch spins up a thread per logical CPU and schedules two onto each physical
+  core, where they contend for the same AVX-512/AMX units — the main cause of the "more
+  threads = slower / jittery p95" effect. The fix is to run **one thread per physical core**
+  (we use `numactl --physcpubind=0-31` + `torch.set_num_threads(32)`), not to change the
+  instance.
+- **2 NUMA domains on one socket.** `lscpu` shows `Socket(s): 1` but `NUMA node(s): 2`
+  (sub-NUMA clustering). Cross-node memory access is slower (NUMA distance 15 vs 10), so
+  each replica should bind its memory to its own node (`--membind`). Spanning both nodes
+  (e.g. 96 threads) regresses latency and spikes p95.
+- **Frequency/turbo is host-managed** (no `cpufreq` governor is exposed on EC2) and C-states
+  are shallow — nothing to tune there.
+
+Two ways to get sane threading, pick one:
+
+| approach | where | effect |
+|----------|-------|--------|
+| **Runtime pinning (recommended)** | `numactl --physcpubind=… --membind=…` + `torch.set_num_threads(N)` (the `make` targets and `sdbench-serve` already do this) | one thread per physical core on one NUMA node; lets you run 8 pinned replicas for max throughput |
+| **Disable hyperthreading at launch** | `aws ec2 run-instances … --cpu-options CoreCount=64,ThreadsPerCore=1` (both fields are required together; use the instance's physical core count for `CoreCount`) | instance presents 64 vCPUs = 64 cores, so PyTorch's defaults become sane automatically — but you lose the ability to pack replicas across all 64 cores, so throughput is lower |
+
+For a throughput-oriented router, prefer **runtime pinning**. Disable HT only if you want a
+single process to "just work" without any pinning flags and don't need the replica fan-out.
+
 ## Single replica (simplest)
 
 ```bash

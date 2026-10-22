@@ -124,25 +124,32 @@ decision on average."* The accuracy is served at a 4096-token window. So the pub
 
 ### Like-for-like at ~950 input tokens
 
-We measured on `r8i.32xlarge` (Intel Xeon 6975P, CPU-only, 32 threads pinned to one NUMA
-node) at a decision whose full input (state + rubric + options) was **997 tokens**:
+We measured on `r8i.32xlarge` (Intel Xeon 6975P, CPU-only) at a decision whose full input
+(state + rubric + options) was **1007 tokens** — all three configs in one session, 15 iters
+each, identical decision output (`technical_support` @ 0.3658) confirming the optimizations
+don't change the answer:
 
 | config | p50 latency | vs RTX 3090 (115 ms) |
 |--------|------------:|---------------------:|
-| optimized (merge + precision) | 1322 ms | ~11.5× slower |
-| **optimized + `torch.compile`** | **925 ms** | **~8× slower** |
+| baseline (untuned, 64t) | 1301 ms | ~11× slower |
+| optimized (merge + precision, 32t pinned) | 1385 ms | ~12× slower |
+| **optimized + `torch.compile` (32t pinned)** | **1224 ms** | **~11× slower** |
 | RTX 3090 (published) | 115 ms | 1× |
 | Apple M3 (published, small task) | 153 ms | — |
 
 Reading of the comparison (honest version):
 
-- At the **real ~950-token decision size**, one CPU decision is **~8× slower than a 3090**
+- At the **real ~950-token decision size**, one CPU decision is **~11× slower than a 3090**
   even fully optimized. For single-decision latency a GPU or Apple silicon clearly wins;
   the CPU path is for no-GPU hosts, RAM-heavy co-tenancy, or horizontal CPU fleets.
-- **`torch.compile` earns its keep exactly here:** 1322 → 925 ms (**1.43×**), under 1 s.
-- For context, our smaller tiers are much faster (tiny 9-tok 187 ms, medium 92-tok 275 ms)
-  — but those are **not** comparable to the published number, which is ~950 tokens. Quoting
-  the 9-token figure against 115 ms would be a cherry-pick; we don't.
+- **At this size the matmul-level wins (merge + precision) are marginal** — the prompt is
+  compute-bound and would prefer more cores than one NUMA node offers, so merge+precision at
+  32 threads is a wash (even slightly slower than the 64-thread baseline). **`torch.compile`
+  is the only lever that helps here** (1301 → 1224 ms, ~1.06×). The big 1.4–2.0× wins are on
+  the short/medium payloads a router handles most often.
+- Our smaller tiers are much faster (tiny 9-tok 187 ms, medium 92-tok 275 ms) — but those
+  are **not** comparable to the published number, which is ~950 tokens. Quoting the 9-token
+  figure against 115 ms would be a cherry-pick; we don't.
 - **Accuracy is unchanged:** every optimization is numerically exact, so the published
   **72.3 % JevBench** still applies to this build. We trade nothing for the latency.
 
@@ -152,7 +159,7 @@ also markets the r8i for **2.5× the memory bandwidth** of the previous generati
 exact resource our concurrency ceiling is bound by, so the instance is well matched here.
 
 **Caveats:** the published ~115 ms / ~153 ms are AWS medians over JevBench's task mix on
-their hardware; our 925 ms is a single ~997-token routing decision measured here. Same
+their hardware; our figures are a single ~1007-token routing decision measured here. Same
 order of token count, not an identical controlled harness. The model's GitHub issues also
 flag CPU **cold-start** and **concurrency** behaviour — both addressed here (warm
 persistent engine; multi-replica serving).

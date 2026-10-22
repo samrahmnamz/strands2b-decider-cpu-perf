@@ -65,6 +65,7 @@ strands-decider ask StrandsAgents/strands-decider-2B-hobson-v19 \
 make bench-baseline        # untuned (64 threads, no optimizations)
 make bench-opt             # our optimized stack, pinned to 32 physical cores
 make bench-compile         # + torch.compile (one-time ~150s compile)
+make bench-jev             # ~950-tok (JevBench size): baseline + optimized + compile
 make concurrency           # throughput: 8 replicas x 8 threads
 
 # 4. match AWS's published ~950-token decision size exactly
@@ -144,7 +145,10 @@ CUDA/XPU/MLU, so it's a no-op on CPU (details in docs/RESULTS.md).
 | **medium** |  92 | 545 ms | **275 ms** | **2.0×** |
 | **large**  | 206 | 601 ms | **420 ms** | **1.4×** |
 | xlarge | 534 | 825 ms | 719 ms | 1.1× |
-| ~950-tok (JevBench size) | 997 | — | **925 ms** | — |
+| ~950-tok (JevBench size) | 1007 | 1301 ms | **1224 ms** | 1.1× |
+
+At the large ~950-token size the matmul-level wins are marginal (the prompt is
+compute-bound and would prefer more cores); **`torch.compile` is the one that helps** here.
 
 The medium/large payloads a real router sees most get the biggest wins. Pinning also
 **collapses p95 onto p50** (predictable tail latency, not just a lower median).
@@ -194,29 +198,32 @@ AWS and the model card report:
 
 Measuring **our CPU at the same ~950-token size** (so it's a fair fight):
 
-| ~950-token decision (997 tokens measured) | p50 latency | vs RTX 3090 |
+| ~950-token decision (1007 tokens measured) | p50 latency | vs RTX 3090 |
 |--------------------------------------------|------------:|------------:|
-| r8i CPU — optimized (merge + precision) | 1322 ms | ~11.5× slower |
-| **r8i CPU — optimized + `torch.compile`** | **925 ms** | **~8× slower** |
+| r8i CPU — baseline (untuned, 64t) | 1301 ms | ~11× slower |
+| r8i CPU — optimized (merge + precision, 32t pinned) | 1385 ms | ~12× slower |
+| **r8i CPU — optimized + `torch.compile`** | **1224 ms** | **~11× slower** |
 | RTX 3090 (published) | 115 ms | 1× |
 | Apple M3 (published) | 153 ms | — |
 
 **Honest takeaway:**
 
-- At the **real decision size**, one CPU decision is **~8× slower than a 3090** even fully
+- At the **real decision size**, one CPU decision is **~11× slower than a 3090** even fully
   optimized. For single-decision latency, a GPU or Apple silicon clearly wins. The CPU path
   is for when you have **no GPU**, want the huge RAM for co-located work, or are scaling
   **horizontally on CPU fleets** where aggregate throughput and cost matter more than the
   latency of any one decision.
-- **`torch.compile` earns its keep here:** it cut the ~950-token decision from 1322 ms to
-  **925 ms** (1.43×), breaking the 1-second mark.
-- **Accuracy is unchanged** — every optimization is numerically exact, so AWS's **72.3%**
-  JevBench figure still applies to this build.
+- **At this size the matmul-level wins are marginal** (the prompt is compute-bound and
+  prefers more cores than one NUMA node gives it); **`torch.compile`** is the one that
+  helps, trimming the baseline 1301 ms to **1224 ms**. The big 1.4–2.0× wins show up on the
+  short/medium payloads a router handles most often (see §6).
+- **Accuracy is unchanged** — every optimization is numerically exact (same decision,
+  `technical_support` @ 0.366, in every run), so AWS's **72.3%** JevBench figure still
+  applies to this build.
 
-**Caveat:** AWS's ~115/153 ms are medians over JevBench's mix on their hardware; our 925 ms
-is one ~997-token routing decision measured here. Same order of token count, not an
-identical controlled harness. Reproduce our figure with `sdbench-latency --token-target 950
---compile`.
+**Caveat:** AWS's ~115/153 ms are medians over JevBench's mix on their hardware; our numbers
+are a single ~1007-token routing decision measured here. Same order of token count, not an
+identical controlled harness. Reproduce with `sdbench-latency --token-target 950 --compile`.
 
 [sd-blog]: https://strandsagents.com/blog/introducing-strands-decider/
 [infoq]: https://www.infoq.com/news/2026/10/aws-strands-agents/
